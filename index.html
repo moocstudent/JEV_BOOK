@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-Hans" data-lang="zh">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Jev 与 Laya · 类型化决策模型:从一个开源平替到一次上线判决 · typed decisions</title>
+<meta name="description" content="中英双语的「System One 决策模型」自学教程,面向要把 Jev 或它的开源平替(Laya 为首)真的评测、部署、并做出上线判决的工程师:讲清决策为什么不该是文本、choice/score/noul 三个原语的数学、一次前向为什么比自回归快一个数量级、Jev 的接口与输出免费的定价后果、概率校准这一类模型真正的卖点(可靠性图、ECE、温度缩放、门槛-覆盖率-精度曲线)、Laya 三个 checkpoint 与语言路由、head_max_len 的 token 预算、只有读源码才知道的坑(noul 标签偏置、被库拒绝的 choice:11+ 温度桶、confidence 其实是归一化熵)、编码器派与 LLM 派三十多个开源实现、你可能根本不需要 System One 模型的四条替代路、怎么用三条基线和四张表在两小时内做出判决、协议兼容的自托管与排队容量、门槛之下的两级架构,最后落到一个全部实测的失败案例(216 条中文需求分 18 类只有 0.505、置信度门槛失效)、一个成本模型推演的成功形状,和一棵选型决策树。每章开头是一个可交互的决策台,结尾是 Python / 请求 / 部署评测 三个视角的真实代码——所有数字现算,所有代码照着能跑。A bilingual course on System One decision models — Jev and its open alternatives, Laya first — measuring, deploying and deciding whether to ship, with a live bench in every chapter and code meant to run." />
+
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600&family=Noto+Serif+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+  rel="stylesheet"
+/>
+
+<link rel="stylesheet" href="styles.css?v=2" />
+<link rel="stylesheet" href="jv.css?v=2" />
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- React + Babel (pinned) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js" crossorigin="anonymous"></script>
+
+  <!-- Markdown -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+
+  <!-- App scripts. Order matters: viz.jsx defines the shared prelude that
+       viz2/viz3 reuse; viz3.jsx defines the VIZ registry and <Viz>;
+       figures.jsx defines <Figure>; code.jsx defines <CodeLab>; code2.jsx
+       extends CODE. ?v bumps each release to bust the Babel cache. -->
+  <script type="text/babel" src="i18n.jsx?v=2"></script>
+  <script type="text/babel" src="data.jsx?v=2"></script>
+  <script type="text/babel" src="viz.jsx?v=2"></script>
+  <script type="text/babel" src="viz2.jsx?v=2"></script>
+  <script type="text/babel" src="viz3.jsx?v=2"></script>
+  <script type="text/babel" src="figures.jsx?v=2"></script>
+  <script type="text/babel" src="code.jsx?v=2"></script>
+  <script type="text/babel" src="code2.jsx?v=2"></script>
+  <script type="text/babel" src="pages.jsx?v=2"></script>
+  <script type="text/babel" src="app.jsx?v=2"></script>
+</body>
+</html>
