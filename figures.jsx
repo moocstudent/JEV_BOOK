@@ -496,6 +496,39 @@ FIGN["t24-tree"] = () => {
   );
 };
 
+// t25 — the two architectures side by side
+FIGN["t25-arch"] = () => {
+  const L = useL();
+  return (
+    <FigFrame idx="SO4" h={240} cap={L("上:解码器-only,因果注意力,逐 token 自回归,KV cache 随序列增长——N 次前向。下:双向编码器,一次前向,决策头直接读概率——答案没有长度。", "Top: decoder-only, causal attention, autoregressive token by token, a KV cache that grows with the sequence — N passes. Bottom: a bidirectional encoder, one forward pass, decision heads reading probabilities — the answer has no length.")}>
+      {/* --- ChatGPT / autoregressive --- */}
+      <FT x={70} y={22} anchor="start" sz={11} c="var(--bad)" wt={700}>ChatGPT · System 2</FT>
+      <FBox x={30} y={34} w={70} h={30} label={useL()("上文", "context")} tone="n" />
+      <FArrow x1={100} y1={49} x2={128} y2={49} />
+      <FBox x={128} y={30} w={90} h={38} label={useL()("解码器栈", "decoder stack")} sub={useL()("因果注意力", "causal attn")} tone="bad" />
+      {/* token-by-token emission with feedback loop */}
+      {[0, 1, 2, 3].map((i) => <FBox key={i} x={250 + i * 66} y={34} w={54} h={26} label={"tok" + (i + 1)} tone="n" />)}
+      <FArrow x1={218} y1={49} x2={250} y2={49} c="var(--bad)" />
+      {[0, 1, 2].map((i) => <FArrow key={i} x1={304 + i * 66} y1={49} x2={316 + i * 66} y2={49} c="var(--bad)" />)}
+      {/* feedback: each token fed back */}
+      <path d="M277,60 C277,84 173,84 173,70" fill="none" stroke="var(--bad)" strokeWidth="1" strokeDasharray="3 2" />
+      <FT x={230} y={92} anchor="start" sz={8.5} c="var(--bad)">{L("每个 token 喂回去 → N 次前向 + KV cache", "each token fed back → N passes + KV cache")}</FT>
+      <line x1={20} y1={112} x2={660} y2={112} stroke="var(--hairline)" />
+      {/* --- Jev / encoder --- */}
+      <FT x={70} y={134} anchor="start" sz={11} c="var(--ok)" wt={700}>Jev · System 1</FT>
+      <FBox x={30} y={146} w={70} h={30} label={useL()("状态", "state")} tone="n" />
+      <FBox x={104} y={146} w={70} h={30} label={useL()("选项", "options")} tone="n" />
+      <FArrow x1={174} y1={161} x2={202} y2={161} c="var(--ok)" wdt={2} />
+      <FBox x={202} y={140} w={130} h={44} label={useL()("双向编码器", "bidirectional encoder")} sub="~400M · 1 pass" tone="ok" />
+      <FArrow x1={332} y1={161} x2={360} y2={161} c="var(--ok)" wdt={2} />
+      <FBox x={360} y={140} w={90} h={44} label={useL()("决策头", "decision heads")} tone="p" />
+      <FArrow x1={450} y1={161} x2={478} y2={161} c="var(--ok)" wdt={2} />
+      <FBox x={478} y={146} w={160} h={30} label={useL()("choice/score/noul + 概率", "choice/score/noul + prob")} tone="acc" />
+      <FT x={230} y={204} anchor="start" sz={8.5} c="var(--ok)">{L("一次前向,无回环,无 KV cache", "one forward, no loop, no KV cache")}</FT>
+    </FigFrame>
+  );
+};
+
 /* ================= module-architecture figures ================= */
 function ModArch({ idx, title, boxes, cap }) {
   return (
@@ -523,6 +556,7 @@ const CHAP_FIG = {
   t7: "t7-reliab", t8: "t8-temp", t9: "t9-gate", t10: "t10-router", t11: "t11-budget", t12: "t12-noul",
   t13: "t13-encoder", t14: "t14-llm", t15: "t15-routes", t16: "t16-base", t17: "t17-dataset", t18: "t18-report",
   t19: "t19-serve", t20: "t20-capacity", t21: "t21-tier", t22: "t22-case", t23: "t23-win", t24: "t24-tree",
+  t25: "t25-arch",
 };
 
 function Figure({ name, idx }) {

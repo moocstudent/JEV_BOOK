@@ -534,6 +534,59 @@ grep -n "TEMP_MIN\\|normalized entropy\\|act_probability" $(python -c \\
   ],
 };
 
+/* ============ SO4 · t25 ============ */
+CODE.t25 = {
+  note: { zh: "两种范式并排。Python 那栏把区别讲成代码:自回归是一个 N 次的循环、每步喂回上一个 token;一次前向是读一次分类头。服务那栏是两套完全不同的技术栈。训练那栏是最根本的分界——优化的目标函数不一样。",
+          en: "The two paradigms side by side. The Python tab states the difference as code: autoregression is an N-step loop feeding each token back; the single forward reads a classification head once. The serving tab is two entirely different stacks. The training tab is the deepest divide — the objective being optimised is not the same." },
+  tabs: [
+    { lang: PY, k: "py", file: "two_paradigms.py",
+      src: `# --- ChatGPT: autoregressive. N sequential passes, KV cache grows. ---
+def generate(model, prompt, max_new=48):
+    ids = tokenize(prompt)
+    cache = None
+    for _ in range(max_new):                 # N forward passes, one per token
+        logits, cache = model(ids[-1:], cache)   # each reads all weights + cache
+        nxt = sample(logits[-1])             # a sampling loop
+        ids.append(nxt)
+        if nxt == EOS: break
+    return detokenize(ids)                    # then you still parse JSON out of it
+
+# --- Jev: non-autoregressive. ONE pass, answer read off a head. ---
+def decide(encoder, heads, state, questions):
+    h = encoder(tokenize(state, questions))  # one bidirectional forward pass
+    out = {}
+    for name, q in questions.items():        # heads run in parallel, no loop
+        logits = heads[q.type](h, q.options) # a classification / regression head
+        out[name] = softmax(logits)          # a calibrated distribution, no text
+    return out                               # nothing to sample, nothing to parse` },
+    { lang: OPS, k: "sh", file: "serving_stacks.sh",
+      src: `# ChatGPT-class: a stack built to make autoregression bearable
+#   vLLM / TensorRT-LLM  ·  paged KV cache  ·  continuous batching
+#   ·  speculative decoding  ·  tensor parallelism across GPUs
+vllm serve meta-llama/Llama-3-70B --tensor-parallel-size 8
+
+# Jev-class: there is no autoregression to optimise, so the stack collapses
+pip install "laya[serve]"
+laya-serve                    # one FastAPI process, constant memory, CPU-ok
+# no KV cache to page, batching = several questions in one forward pass` },
+    { lang: REQ, k: "json", file: "why_faster.json",
+      src: `{
+  "speed_is_three_multiplicative_effects": {
+    "1_passes":  "N forward passes (one per output token)  vs  1",
+    "2_size":    "~10^11-10^12 params  vs  ~10^8 (400M encoder)",
+    "3_no_loop": "sampling loop + growing KV cache  vs  none, constant memory"
+  },
+  "training_objective": {
+    "chatgpt": "next-token likelihood, then RLHF",
+    "jev":     "a strictly proper scoring rule — optimises CALIBRATED probability"
+  },
+  "honest_boundary": "Jev internals never published reproducibly; this architecture",
+  "_": "is what the open clones (Laya, Von) re-derived. Not a better ChatGPT — a",
+  "__": "fast decision head that only answers a predefined answer space."
+}` },
+  ],
+};
+
 window.CODE = CODE;
 window.CodeLab = CodeLab;
 window.highlight = highlight;

@@ -21,6 +21,12 @@ const nf = (n, d = 2) => {
 const pct = (x) => `${Math.round(x * 100)}%`;
 const pct1 = (x) => `${nf(x * 100, 1)}%`;
 const ms = (x) => `${nf(x, 0)} ms`;
+// compact big numbers: 21000 → "21K", 1.3e6 → "1.3M"
+const big = (n) => {
+  if (Math.abs(n) >= 1e6) return `${nf(n / 1e6, 1)}M`;
+  if (Math.abs(n) >= 1e3) return `${nf(n / 1e3, 1)}K`;
+  return nf(n, 0);
+};
 
 // Deterministic PRNG (mulberry32) — reproducible across renders.
 function rng(seed) {
@@ -360,6 +366,78 @@ function LatencyViz() {
   );
 }
 
+/* t25 · archLab — ChatGPT vs Jev, the two paradigms and why one is faster */
+function ArchViz() {
+  const L = useL();
+  const [outTok, setOutTok] = React.useState(48);      // tokens the LLM must emit for a JSON decision
+  const [llmB, setLlmB] = React.useState(175);         // LLM size in billions of params
+  const jevM = 400;                                    // Jev-class encoder, ~400M params
+  // per-pass cost scales ~linearly with params (memory-bandwidth bound). Normalise
+  // so a 400M encoder single pass = 1 unit of work.
+  const llmPass = (llmB * 1000) / jevM;                // one LLM forward vs one encoder forward
+  const llmWork = outTok * llmPass;                    // N sequential passes
+  const jevWork = 1;                                   // one forward, answer has no length
+  const speedup = llmWork / jevWork;
+  const rows = [
+    [L("输出", "output"), L("文本,逐 token", "text, token by token"), L("概率向量", "a probability vector")],
+    [L("解码", "decoding"), L("自回归 · N 次前向", "autoregressive · N passes"), L("一次前向", "single forward")],
+    [L("注意力", "attention"), L("因果(单向)", "causal (one-way)"), L("双向", "bidirectional")],
+    [L("参数量", "params"), "~10¹¹–10¹²", "~10⁸"],
+    [L("训练", "training"), L("下一 token + RLHF", "next-token + RLHF"), L("适当评分规则(校准)", "proper scoring rule")],
+    [L("服务栈", "serving"), "vLLM · KV cache", "FastAPI · " + L("显存常数", "constant mem")],
+    [L("失败模式", "failure"), L("幻觉 / 脏 JSON", "hallucination / bad JSON"), L("高基数崩塌", "high-card collapse")],
+  ];
+  return (
+    <div>
+      <VizHead idx="SO4" title={L("ChatGPT(System 2) 对 Jev(System 1):两种模型的解剖", "ChatGPT (System 2) vs Jev (System 1): two models, dissected")} />
+      <div className="viz-ctrl">
+        <Slider label={L("LLM 要吐多少 token(一段 JSON 决策)", "tokens the LLM must emit")} min={8} max={200} step={4} value={outTok} onChange={setOutTok} />
+        <Slider label={L("LLM 规模(十亿参数)", "LLM size (B params)")} min={7} max={700} step={1} value={llmB} onChange={setLlmB} fmt={(v) => `${v}B`} />
+      </div>
+      <div className="jv-grid2" style={{ marginTop: 10 }}>
+        <div className="jv-note">
+          <div className="jv-label">ChatGPT · System 2</div>
+          <div style={{ font: "600 20px var(--f-mono)", color: "var(--bad)" }}>{big(llmWork)}×</div>
+          <div style={{ font: "500 11px var(--f-mono)", color: "var(--muted)" }}>{outTok} {L("次前向 × 大模型", "passes × big model")}</div>
+        </div>
+        <div className="jv-note">
+          <div className="jv-label">Jev · System 1</div>
+          <div style={{ font: "600 20px var(--f-mono)", color: "var(--ok)" }}>1×</div>
+          <div style={{ font: "500 11px var(--f-mono)", color: "var(--muted)" }}>{L("一次前向 · 400M", "one forward · 400M")}</div>
+        </div>
+      </div>
+      <div className="jv-kpi-grid">
+        <Kpi label={L("前向次数比", "forward-pass ratio")} value={`${outTok} : 1`} tone="acc" hint={L("答案没有长度", "the answer has no length")} />
+        <Kpi label={L("参数量比", "param ratio")} value={`${nf(llmPass, 0)}×`} tone="warn" hint={L("每次前向也更贵", "each pass costs more too")} />
+        <Kpi label={L("总加速(相乘)", "total speed-up (product)")} value={`${big(speedup)}×`} tone="ok" />
+        <Kpi label={L("显存", "memory")} value={L("常数 vs 增长", "constant vs growing")} tone="mut" hint={L("无 KV cache", "no KV cache")} />
+      </div>
+      <div style={{ marginTop: 10, overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", font: "500 11.5px var(--f-body)" }}>
+          <thead><tr>
+            <th style={{ textAlign: "left", padding: "5px 8px", color: "var(--muted)", font: "600 10px var(--f-mono)" }}></th>
+            <th style={{ textAlign: "left", padding: "5px 8px", color: "var(--bad)" }}>ChatGPT</th>
+            <th style={{ textAlign: "left", padding: "5px 8px", color: "var(--ok)" }}>Jev</th>
+          </tr></thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={i} style={{ borderTop: "1px solid var(--hairline)" }}>
+                <td style={{ padding: "5px 8px", color: "var(--muted)", whiteSpace: "nowrap" }}>{r[0]}</td>
+                <td style={{ padding: "5px 8px", color: "var(--ink)" }}>{r[1]}</td>
+                <td style={{ padding: "5px 8px", color: "var(--ink)" }}>{r[2]}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <Note mark="=">
+        {L("为什么快是三个相乘的效应:一次前向对 N 次、模型小一百到一千倍、没有采样循环和随序列增长的 KV cache。但这不是更好的 ChatGPT——它只能回答你预先定义好答案空间的问题。",
+           "The speed is three multiplicative effects: one forward pass against N, a model 100–1000× smaller, and no sampling loop or KV cache that grows with the sequence. But it is not a better ChatGPT — it can only answer questions whose answer space you defined in advance.")}
+      </Note>
+    </div>
+  );
+}
+
 /* =========================================================
    Module II · JV — Jev 本体
    ========================================================= */
@@ -593,7 +671,7 @@ function GateViz() {
 }
 
 window.__JV_VIZ_1 = {
-  pipeLab: PipeViz, primLab: PrimViz, latencyLab: LatencyViz,
+  pipeLab: PipeViz, primLab: PrimViz, latencyLab: LatencyViz, archLab: ArchViz,
   apiLab: ApiViz, costLab: CostViz, claimLab: ClaimViz,
   calibLab: CalibViz, tempLab: TempViz, gateLab: GateViz,
 };
