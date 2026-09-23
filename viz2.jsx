@@ -139,6 +139,92 @@ function HonestViz() {
   );
 }
 
+/* t26 · runtimeLab — where the model lives + the marker-scoring forward pass */
+function RuntimeViz() {
+  const L = useL();
+  const [k, setK] = React.useState(4);
+  const [d, setD] = React.useState(1024);       // encoder hidden size
+  const [seqLen, setSeqLen] = React.useState(96);
+  const [T, setT] = React.useState(1.2);
+  const [topPull, setTopPull] = React.useState(1.6);
+  // the scorer emits one logit per option marker; here we synthesise k marker
+  // logits deterministically (one option stands out by topPull) and run the
+  // real pipeline: divide by temperature, softmax, read choice + confidence.
+  const r = rng(k * 100 + Math.round(topPull * 10));
+  const logits = Array.from({ length: k }, (_, i) => (i === 0 ? topPull : 0) + gauss(r) * 0.5);
+  const p = softmax(logits, T);
+  let top = 0; for (let i = 1; i < k; i++) if (p[i] > p[top]) top = i;
+  const conf = layaConf(p);
+  const opt = ["A", "B", "C", "D", "E", "F", "G", "H"].slice(0, k);
+  // one bidirectional forward pass — cost scales with input (seqLen) and d, NOT output
+  const passCost = (seqLen * seqLen + seqLen * d) / 1e5;
+  return (
+    <div>
+      <VizHead idx="LY4" title={L("模型在哪里,以及一次前向怎么变成一个答案", "Where the model lives, and how one forward pass becomes an answer")} />
+      {/* three locations */}
+      <div className="jv-grid3" style={{ marginTop: 4 }}>
+        <div className="jv-note"><div className="jv-label">{L("① 你的脚本", "① your script")}</div>
+          <div style={{ font: "500 11px var(--f-mono)", color: "var(--ok)" }}>{L("本地 · 无权重", "local · no weights")}</div>
+          <div style={{ font: "500 10px var(--f-body)", color: "var(--muted)" }}>laya_check.py</div></div>
+        <div className="jv-note"><div className="jv-label">{L("② laya 库", "② the laya lib")}</div>
+          <div style={{ font: "500 11px var(--f-mono)", color: "var(--acc, var(--accent))" }}>{L("pip · 无权重", "pip · no weights")}</div>
+          <div style={{ font: "500 10px var(--f-body)", color: "var(--muted)" }}>{L("9 个 .py,~117KB", "9 .py files, ~117KB")}</div></div>
+        <div className="jv-note"><div className="jv-label">{L("③ 权重", "③ the weights")}</div>
+          <div style={{ font: "500 11px var(--f-mono)", color: "var(--bad)" }}>{L("远端→本地缓存", "remote→cached")}</div>
+          <div style={{ font: "500 10px var(--f-body)", color: "var(--muted)" }}>HF · ~/.cache</div></div>
+      </div>
+      <Note mark="=">
+        {L("权重缓存好之后,推理 100% 在本地 CPU 上跑,agent.predict 不向任何远端 API 发一个字节——这是它和 Jev(托管远端 API)的根本区别。", "Once cached, inference runs 100% on the local CPU; agent.predict sends not a byte to any remote API — the root difference from Jev, a hosted remote API.")}
+      </Note>
+      {/* forward-pass controls */}
+      <div className="viz-ctrl" style={{ marginTop: 10 }}>
+        <Slider label={L("选项数 k(= 标记数)", "options k (= markers)")} min={2} max={8} step={1} value={k} onChange={setK} />
+        <Slider label={L("序列长度 L(= 输入)", "sequence length L (= input)")} min={16} max={512} step={16} value={seqLen} onChange={setSeqLen} />
+        <Slider label={L("隐藏维度 d", "hidden size d")} min={256} max={1024} step={128} value={d} onChange={setD} />
+        <Slider label={L("温度 T(分桶)", "temperature T (bucketed)")} min={0.5} max={3} step={0.1} value={T} onChange={setT} />
+      </div>
+      {/* shape pipeline */}
+      <div style={{ marginTop: 8, overflowX: "auto" }}>
+        <div style={{ display: "flex", gap: 6, alignItems: "center", minWidth: 560, font: "600 10.5px var(--f-mono)" }}>
+          {[
+            [`input_ids`, `[1,${seqLen}]`, "n"],
+            [L("编码器(双向)", "encoder"), `[1,${seqLen},${d}]`, "p"],
+            [`+type_emb·head`, `[1,${seqLen},${d}]`, "n"],
+            [`gather markers`, `[1,${k},${d}]`, "a"],
+            [`scorer`, `[1,${k}]`, "a"],
+            [`÷T·softmax`, `p[${k}]`, "ok"],
+          ].map((s, i) => (
+            <React.Fragment key={i}>
+              <div style={{ padding: "6px 8px", borderRadius: 6, textAlign: "center", whiteSpace: "nowrap",
+                background: "var(--surface-2)", border: `1px solid ${i === 5 ? "var(--ok)" : "var(--hairline)"}` }}>
+                <div style={{ color: "var(--ink)" }}>{s[0]}</div>
+                <div style={{ color: "var(--muted)", fontSize: 9.5 }}>{s[1]}</div>
+              </div>
+              {i < 5 && <span style={{ color: "var(--muted)" }}>→</span>}
+            </React.Fragment>
+          ))}
+        </div>
+      </div>
+      {/* live marker scoring */}
+      <div style={{ marginTop: 10 }}>
+        <div className="jv-cap">{L("scorer 给每个选项标记打一个 logit → 除以 T → softmax", "the scorer emits one logit per marker → ÷T → softmax")}</div>
+        <DistBars probs={p} labels={opt} mark={top} />
+      </div>
+      <div className="jv-kpi-grid">
+        <Kpi label={L("前向次数", "forward passes")} value="1" tone="ok" hint={L("非自回归,无 KV cache", "non-autoregressive, no KV cache")} />
+        <Kpi label={L("一次前向的代价", "cost of one pass")} value={nf(passCost, 1)} tone="acc" hint={L("随 L 与 d,不随答案", "scales with L & d, not the answer")} />
+        <Kpi label={L("答案", "answer")} value={opt[top]} tone="acc" hint={`p=${nf(p[top], 3)}`} />
+        <Kpi label={L("confidence(=归一化熵)", "confidence (=norm. entropy)")} value={nf(conf, 3)} tone="warn" hint={L("不是概率", "not a probability")} />
+      </div>
+      <Note mark="!">
+        <span dangerouslySetInnerHTML={{ __html: L(
+          "关键设计:没有固定分类头。选项是拼进输入的文本,每个留一个标记;一次前向后在标记处 gather 隐向量,用同一个 <code>scorer</code> 打成每选项一个 logit。这解释了快(一次前向)也解释了高基数崩塌(k 个标记抢 head_max_len)。",
+          "The key design: no fixed classification head. Options are text spliced into the input, each leaving a marker; after one pass the hidden vectors at those markers are gathered and the shared <code>scorer</code> makes one logit each. This explains the speed (one pass) and the high-cardinality collapse (k markers fighting for head_max_len).") }} />
+      </Note>
+    </div>
+  );
+}
+
 /* =========================================================
    Module V · OS — 开源生态
    ========================================================= */
@@ -370,7 +456,7 @@ function ReportViz() {
 }
 
 window.__JV_VIZ_2 = {
-  routeLab: RouteViz, budgetLab: BudgetViz, honestLab: HonestViz,
+  routeLab: RouteViz, budgetLab: BudgetViz, honestLab: HonestViz, runtimeLab: RuntimeViz,
   encoderLab: EncoderViz, llmLab: LlmViz, routesLab: RoutesViz,
   baseLab: BaseViz, datasetLab: DatasetViz, reportLab: ReportViz,
 };

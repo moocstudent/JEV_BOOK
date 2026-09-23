@@ -529,6 +529,40 @@ FIGN["t25-arch"] = () => {
   );
 };
 
+// t26 — where it lives + the marker-scoring forward pass
+FIGN["t26-runtime"] = () => {
+  const L = useL();
+  return (
+    <FigFrame idx="LY4" h={230} cap={L("上:三个位置——本地脚本、pip 库、远端缓存的权重;推理在本地 CPU。下:一次前向,选项是输入里的标记,在标记处 gather 隐向量,同一个 scorer 打成每选项一个 logit,÷T 后 softmax。", "Top: three locations — a local script, the pip library, remote-cached weights; inference on the local CPU. Bottom: one forward pass, options are markers in the input, hidden vectors are gathered at the markers and the shared scorer makes one logit each, ÷T then softmax.")}>
+      {/* three locations */}
+      <FBox x={30} y={26} w={130} h={40} label={useL()("① 脚本", "① script")} sub={useL()("本地 · 无权重", "local · no weights")} tone="ok" />
+      <FBox x={190} y={26} w={140} h={40} label={useL()("② laya 库", "② laya lib")} sub={useL()("pip · 无权重", "pip · no weights")} tone="acc" />
+      <FBox x={360} y={26} w={150} h={40} label={useL()("③ 权重", "③ weights")} sub="HF → ~/.cache" tone="bad" />
+      <FArrow x1={160} y1={46} x2={190} y2={46} /><FArrow x1={330} y1={46} x2={360} y2={46} />
+      <FBox x={540} y={26} w={110} h={40} label="CPU" sub={useL()("本地推理", "local inference")} tone="p" />
+      <FArrow x1={510} y1={46} x2={540} y2={46} c="var(--ok)" wdt={2} />
+      <line x1={20} y1={86} x2={660} y2={86} stroke="var(--hairline)" />
+      {/* forward pass */}
+      <FT x={40} y={108} anchor="start" sz={10} c="var(--ink)" wt={700}>{L("一次前向", "one forward pass")}</FT>
+      {/* input sequence with markers */}
+      <FT x={30} y={132} anchor="start" sz={9} c="var(--muted)">input_ids</FT>
+      {[...Array(10)].map((_, i) => {
+        const mark = i === 2 || i === 5 || i === 8;
+        return <rect key={i} x={100 + i * 22} y={124} width={18} height={16} rx="2"
+          fill={mark ? "color-mix(in srgb, var(--accent) 40%, transparent)" : "var(--surface-2)"}
+          stroke={mark ? "var(--accent)" : "var(--hairline)"} />;
+      })}
+      <FT x={330} y={122} anchor="start" sz={8} c="var(--accent)">{L("↑ 选项标记", "↑ option markers")}</FT>
+      <FArrow x1={210} y1={158} x2={210} y2={176} />
+      <FBox x={100} y={176} w={230} h={30} label={useL()("双向编码器 + head", "bidirectional encoder + head")} tone="p" />
+      <FArrow x1={330} y1={191} x2={360} y2={191} />
+      <FBox x={360} y={176} w={120} h={30} label={useL()("gather 标记 → scorer", "gather markers → scorer")} tone="a" />
+      <FArrow x1={480} y1={191} x2={510} y2={191} />
+      <FBox x={510} y={176} w={140} h={30} label={useL()("÷T · softmax → p", "÷T · softmax → p")} tone="ok" />
+    </FigFrame>
+  );
+};
+
 /* ================= module-architecture figures ================= */
 function ModArch({ idx, title, boxes, cap }) {
   return (
@@ -556,7 +590,7 @@ const CHAP_FIG = {
   t7: "t7-reliab", t8: "t8-temp", t9: "t9-gate", t10: "t10-router", t11: "t11-budget", t12: "t12-noul",
   t13: "t13-encoder", t14: "t14-llm", t15: "t15-routes", t16: "t16-base", t17: "t17-dataset", t18: "t18-report",
   t19: "t19-serve", t20: "t20-capacity", t21: "t21-tier", t22: "t22-case", t23: "t23-win", t24: "t24-tree",
-  t25: "t25-arch",
+  t25: "t25-arch", t26: "t26-runtime",
 };
 
 function Figure({ name, idx }) {

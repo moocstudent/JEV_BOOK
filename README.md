@@ -2,7 +2,7 @@
 
 中英双语的「System One 决策模型」自学教程 —— 面向要把 Jev 或它的开源平替(Laya 为首)真的评测、部署、并做出上线判决的工程师。
 
-**8 个模块 / 25 章**,每章由三块组成:
+**8 个模块 / 26 章**,每章由三块组成:
 
 - **决策台**:一个可交互模拟器,所有数字在你的浏览器里现算 —— 真实的 softmax、真实的 ECE、真实的温度网格搜索、真实的 M/M/c 排队。没有一张是画出来的假图。
 - **解释**:讲清机制、代价和边界。
@@ -17,7 +17,7 @@
 | I | 决策不是文本 | 4 | 两条流水线 · 三原语(choice/score/noul) · 一次前向的延迟 · **ChatGPT vs Jev 解剖对比** |
 | II | Jev 本体 | 3 | /v1/systemone 接口 · **输出免费的定价后果** · 宣传数字的条件 |
 | III | 概率与校准 | 3 | 可靠性图/ECE/Brier · **温度缩放** · 门槛-覆盖率-精度曲线 |
-| IV | Laya | 3 | 三 checkpoint 与语言路由 · head_max_len token 预算 · **只有读源码才知道的坑** |
+| IV | Laya | 4 | 三 checkpoint 与语言路由 · head_max_len token 预算 · 源码级的坑 · **运行时:模型在哪、怎么跑** |
 | V | 开源生态 | 3 | 编码器派(Von/Verdict) · LLM 派(Kev/SemIf) · **你可能根本不需要它** |
 | VI | 自己评测 | 3 | 三条基线 · 建评测集与一致率 · 四张表判决模板 |
 | VII | 上线工程 | 3 | 协议兼容自托管 · 排队容量 · 两级架构 |
@@ -48,7 +48,7 @@ code2.jsx           t13–t24 代码面板
 pages.jsx           首页 / 模块页 / 章节页
 app.jsx             路由、主题、进度
 jv.css / styles.css 决策台样式 + 全站样式(indigo/amber 主题)
-content/            50 个 markdown 讲义(t1–t25 × zh/en)
+content/            52 个 markdown 讲义(t1–t26 × zh/en)
 ```
 
 ## 关于「所有数字现算」

@@ -413,5 +413,63 @@ python laya_check.py yours.csv -c crit.json -m multilingual   # re-measure
   ],
 };
 
+/* ============ LY4 · t26 ============ */
+CODE.t26 = {
+  note: { zh: "三个位置一次看清。Python 那栏:你的脚本只碰两行 laya 代码,库把权重从 HF 拉下来缓存到本地,推理跑在本地 CPU。结构那栏:DecisionModel 的真实构成——编码器 + 类型嵌入 + 小 head + 一个把任意 token 打成标量的 scorer。Shell 那栏:证明库里没有权重、权重在 HF 缓存里。",
+          en: "The three locations at a glance. Python: your script touches two lines of laya, the library pulls the weights from HF and caches them locally, inference runs on the local CPU. Structure: what DecisionModel really is — an encoder + a type embedding + a small head + a scorer that turns any token into a scalar. Shell: proof the library holds no weights and the weights live in the HF cache." },
+  tabs: [
+    { lang: PY, k: "py", file: "where_it_runs.py",
+      src: `import laya
+
+# 1) LOAD — the library downloads the checkpoint from Hugging Face once
+#    (snapshot_download) and caches it under ~/.cache/huggingface. The pip
+#    package itself contains NO weights — just the code to run them.
+agent = laya.load("convaiinnovations/laya", subfolder="multilingual")
+print(agent.device)          # cpu   (no CUDA on this machine)
+
+# 2) INFER — this runs entirely on the local CPU. Not one byte goes to a
+#    remote API — the difference from Jev, which is a hosted endpoint.
+a = agent.predict(
+    {"text": "客户被重复扣款,请退款"},
+    {"dept": {"type": "choice", "instructions": "哪个部门?",
+              "criteria": {"billing": "退款", "tech": "故障"}}},
+)["answers"]["dept"]
+print(a["choice"], a["probabilities"], a["confidence"])
+# everything above is local; your own script (laya_check.py) adds only
+# pure-Python math (ECE, temperature fit, threshold table) on top of this.` },
+    { lang: REQ, k: "py", file: "DecisionModel.py",
+      src: `# the library's model, from laya/common.py (paraphrased). The defining
+# choice: options are NOT a fixed classification head — they are text
+# markers scored by ONE shared scorer.
+class DecisionModel(nn.Module):
+    def __init__(self, encoder, d):
+        self.encoder  = encoder                      # ModernBERT-large / mmBERT-base
+        self.type_emb = nn.Embedding(3, d)           # choice / score / noul
+        self.head     = nn.TransformerEncoder(..., 2)  # small refinement head
+        self.scorer   = nn.Sequential(nn.LayerNorm(d), nn.Linear(d, d),
+                                      nn.GELU(), nn.Linear(d, 1))   # → 1 scalar
+
+    def forward(self, input_ids, attention_mask, marker_pos, marker_mask, qtype):
+        h = self.encoder(input_ids, attention_mask).last_hidden_state  # ONE pass
+        h = h + self.type_emb(qtype)[:, None, :]      # inject the question type
+        h = self.head(h)                              # refine
+        m = gather(h, marker_pos)                     # pull hidden vec at each marker
+        logits = self.scorer(m).squeeze(-1)           # one logit per OPTION
+        logits = logits.masked_fill(~marker_mask, -1e4)
+        return logits                                 # agent.py then ÷T, softmax` },
+    { lang: OPS, k: "sh", file: "prove_locations.sh",
+      src: `# the pip package is tiny and holds NO weights
+pip show -f laya | grep -E "Location|\\.py" | head
+du -sh $(python -c "import laya,os;print(os.path.dirname(laya.__file__))")   # ~117 KB
+
+# the weights live in the Hugging Face cache, downloaded on first use
+du -sh ~/.cache/huggingface/hub/models--convaiinnovations--laya            # ~1.5 GB
+ls  ~/.cache/huggingface/hub/models--convaiinnovations--laya/snapshots/*/   # model.safetensors
+
+# so: script (local, no weights) → laya (pip, no weights) → weights (HF cache)
+# and inference itself never leaves the local CPU.` },
+  ],
+};
+
 // keep the derived reference the totals use
 window.CODE = CODE;
