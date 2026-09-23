@@ -563,6 +563,34 @@ FIGN["t26-runtime"] = () => {
   );
 };
 
+// t26 appendix — the Hugging Face cache anatomy
+FIGN["t26-cache"] = () => {
+  const L = useL();
+  return (
+    <FigFrame idx="LY4·附" h={230} cap={L("HF 缓存是个内容寻址的 git 镜像:refs/main 指向一个 commit,snapshot 里每个文件都是指向 blobs 的软链接;仓库打包了两个 checkpoint(根=英文,multilingual/=多语言),allow_patterns 只拉你要的那个。", "The HF cache is a content-addressed git mirror: refs/main points at a commit, every file in a snapshot is a symlink into blobs, the repo bundles two checkpoints (root = English, multilingual/), and allow_patterns fetches only the one you asked for.")}>
+      <FBox x={30} y={26} w={110} h={30} label="refs/main" sub={useL()("→ commit SHA", "→ commit SHA")} tone="p" />
+      <FArrow x1={140} y1={41} x2={170} y2={41} />
+      <FBox x={170} y={22} w={150} h={40} label={useL()("snapshots/<SHA>/", "snapshots/<SHA>/")} sub={useL()("全是软链接", "all symlinks")} tone="acc" />
+      <FArrow x1={320} y1={41} x2={350} y2={41} c="var(--muted)" dash />
+      <FBox x={350} y={22} w={140} h={40} label="blobs/" sub={useL()("内容寻址 · 1.5GB", "content-addressed · 1.5GB")} tone="bad" />
+      <FT x={560} y={36} anchor="middle" sz={9} c="var(--muted)">{L("去重、可续传", "dedup, resumable")}</FT>
+      <line x1={20} y1={82} x2={660} y2={82} stroke="var(--hairline)" />
+      <FT x={40} y={104} anchor="start" sz={10} c="var(--ink)" wt={700}>{L("一个 snapshot 里打包了两个 checkpoint", "one snapshot bundles two checkpoints")}</FT>
+      <FBox x={40} y={118} w={280} h={86} label="" tone="n" />
+      <FT x={56} y={138} anchor="start" sz={10} c="var(--ok)" wt={700}>{L("根 = 英文", "root = English")}</FT>
+      <FT x={56} y={156} anchor="start" sz={9} c="var(--muted)">model.safetensors · 843MB</FT>
+      <FT x={56} y={172} anchor="start" sz={9} c="var(--muted)">rl_agent_config.json · encoder/</FT>
+      <FT x={56} y={188} anchor="start" sz={9} c="var(--muted)">tokenizer/ · ModernBERT-large</FT>
+      <FBox x={350} y={118} w={280} h={86} label="" tone="n" />
+      <FT x={366} y={138} anchor="start" sz={10} c="var(--accent)" wt={700}>multilingual/</FT>
+      <FT x={366} y={156} anchor="start" sz={9} c="var(--muted)">model.safetensors · 644MB</FT>
+      <FT x={366} y={172} anchor="start" sz={9} c="var(--muted)">rl_agent_config.json · encoder/</FT>
+      <FT x={366} y={188} anchor="start" sz={9} c="var(--muted)">tokenizer/ · mmBERT-base</FT>
+      <FT x={490} y={116} anchor="start" sz={8.5} c="var(--muted)">{L("typed-decisions/ 没下(未请求)", "typed-decisions/ absent (not requested)")}</FT>
+    </FigFrame>
+  );
+};
+
 /* ================= module-architecture figures ================= */
 function ModArch({ idx, title, boxes, cap }) {
   return (
