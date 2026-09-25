@@ -591,6 +591,36 @@ FIGN["t26-cache"] = () => {
   );
 };
 
+// t27 — a push through TaskaaS → MCP → /v1/systemone, gated per hunk
+FIGN["t27-review"] = () => {
+  const L = useL();
+  return (
+    <FigFrame idx="OP4" h={250} cap={L("上:一次推送触发 TaskaaS,它作为 MCP 客户端调用 review_push;工具把 diff 切成 hunk,每块发一次 /v1/systemone(Jev 或内网 laya-serve)。下:每块一个 k=3 的 choice,不对称过闸——只有高置信度的 approve 自动放行。", "Top: a push triggers TaskaaS, which as an MCP client calls review_push; the tool splits the diff into hunks and sends each one /v1/systemone request (Jev or an in-network laya-serve). Bottom: one k=3 choice per hunk, gated asymmetrically — only a confident approve auto-passes.")}>
+      <FBox x={20} y={26} w={90} h={40} label="git push" sub="webhook / hook" tone="n" />
+      <FArrow x1={110} y1={46} x2={136} y2={46} />
+      <FBox x={136} y={26} w={120} h={40} label="TaskaaS" sub={useL()("MCP 客户端", "MCP client")} tone="p" />
+      <FArrow x1={256} y1={46} x2={282} y2={46} />
+      <FBox x={282} y={26} w={150} h={40} label="review_push" sub={useL()("MCP 工具 · 切 hunk", "MCP tool · split hunks")} tone="acc" />
+      <FArrow x1={432} y1={46} x2={458} y2={46} />
+      <FBox x={458} y={26} w={200} h={40} label="/v1/systemone" sub={useL()("Jev | laya-serve(本地)", "Jev | laya-serve (local)")} tone="p" />
+      <line x1={20} y1={86} x2={660} y2={86} stroke="var(--hairline)" />
+      <FT x={30} y={108} anchor="start" sz={10} c="var(--ink)" wt={700}>{L("每个 hunk", "per hunk")}</FT>
+      <FBox x={30} y={120} w={170} h={46} label="verdict · choice k=3" sub="approve | changes | human" tone="acc" />
+      <FBox x={30} y={176} w={170} h={30} label="severity · score" sub="" tone="n" />
+      <FT x={115} y={226} sz={8.5} c="var(--muted)">{L("noul 不用:判决有三种结局", "no noul: the verdict has 3 outcomes")}</FT>
+      <FArrow x1={200} y1={143} x2={240} y2={143} />
+      <FBox x={240} y={124} w={80} h={38} label={useL()("闸门 θ", "gate θ")} tone="p" />
+      <FArrow x1={320} y1={132} x2={400} y2={112} c="var(--ok)" />
+      <FArrow x1={320} y1={143} x2={400} y2={155} c="var(--warn)" />
+      <FArrow x1={320} y1={154} x2={400} y2={198} c="var(--bad)" />
+      <FBox x={400} y={96} w={250} h={30} label={useL()("approve ≥ θ → 自动放行", "approve ≥ θ → auto_pass")} tone="ok" />
+      <FBox x={400} y={140} w={250} h={30} label={useL()("changes ≥ θ → LLM 写评论", "changes ≥ θ → LLM writes it")} tone="warn" />
+      <FBox x={400} y={184} w={250} h={30} label={useL()("human / 低置信 / 模型挂了 → 人", "human / low conf / down → person")} tone="bad" />
+      <FT x={525} y={234} sz={8.5} c="var(--muted)">{L("推送整体放行 = cⁿ;评审者只读没放行的块", "push passes = cⁿ; reviewers read only the rest")}</FT>
+    </FigFrame>
+  );
+};
+
 /* ================= module-architecture figures ================= */
 function ModArch({ idx, title, boxes, cap }) {
   return (
@@ -609,7 +639,7 @@ FIGN["m3-arch"] = () => { const L = useL(); return <ModArch idx="III" title={L("
 FIGN["m4-arch"] = () => { const L = useL(); return <ModArch idx="IV" title="Laya" cap={L("三个 checkpoint 和路由,token 预算,以及只有读源码才知道的坑。", "Three checkpoints and routing, the token budget, and the traps only the source reveals.")} boxes={[{ l: L("路由", "routing"), s: "LY1" }, { l: L("token 预算", "token budget"), s: "LY2", t: "acc" }, { l: L("诚实清单", "honest list"), s: "LY3", t: "bad" }]} />; };
 FIGN["m5-arch"] = () => { const L = useL(); return <ModArch idx="V" title={L("开源生态", "The Open Ecosystem")} cap={L("编码器派、LLM 派,以及「你可能根本不需要 System One 模型」。", "The encoder camp, the LLM camp, and 'you may not need a System One model at all'.")} boxes={[{ l: L("编码器派", "encoder camp"), s: "OS1" }, { l: L("LLM 派", "LLM camp"), s: "OS2" }, { l: L("四条路", "four routes"), s: "OS3", t: "acc" }]} />; };
 FIGN["m6-arch"] = () => { const L = useL(); return <ModArch idx="VI" title={L("自己评测", "Measure It Yourself")} cap={L("三条基线,评测集怎么建,读四张表到一个判决。", "Three baselines, how to build the eval set, and reading the four tables to a verdict.")} boxes={[{ l: L("三基线", "baselines"), s: "EV1" }, { l: L("建评测集", "the eval set"), s: "EV2", t: "acc" }, { l: L("四张表", "four tables"), s: "EV3" }]} />; };
-FIGN["m7-arch"] = () => { const L = useL(); return <ModArch idx="VII" title={L("上线工程", "Shipping It")} cap={L("协议兼容的自托管,排队容量模型,门槛之下的两级架构。", "Protocol-compatible self-hosting, a queueing capacity model, and the two-tier system below the threshold.")} boxes={[{ l: L("自托管", "self-host"), s: "OP1" }, { l: L("容量", "capacity"), s: "OP2" }, { l: L("两级架构", "two tiers"), s: "OP3", t: "acc" }]} />; };
+FIGN["m7-arch"] = () => { const L = useL(); return <ModArch idx="VII" title={L("上线工程", "Shipping It")} cap={L("协议兼容的自托管,排队容量模型,门槛之下的两级架构,以及把它用在代码评审上的 MCP 推送闸门。", "Protocol-compatible self-hosting, a queueing capacity model, the two-tier system below the threshold, and an MCP push gate that applies it to code review.")} boxes={[{ l: L("自托管", "self-host"), s: "OP1" }, { l: L("容量", "capacity"), s: "OP2" }, { l: L("两级架构", "two tiers"), s: "OP3", t: "acc" }, { l: L("评审闸门", "review gate"), s: "OP4" }]} />; };
 FIGN["m8-arch"] = () => { const L = useL(); return <ModArch idx="VIII" title={L("案例与决策", "Cases & Decision")} cap={L("一个实测的失败案例,一个成本模型的成功形状,一棵选型决策树。", "One measured failure, one modelled winning shape, and a selection decision tree.")} boxes={[{ l: L("失败案例", "failure case"), s: "CS1", t: "bad" }, { l: L("成功形状", "winning shape"), s: "CS2", t: "ok" }, { l: L("决策树", "decision tree"), s: "CS3", t: "acc" }]} />; };
 
 /* ---- map chapter id → its figure name (content uses @fig <name>) ---- */
@@ -618,7 +648,7 @@ const CHAP_FIG = {
   t7: "t7-reliab", t8: "t8-temp", t9: "t9-gate", t10: "t10-router", t11: "t11-budget", t12: "t12-noul",
   t13: "t13-encoder", t14: "t14-llm", t15: "t15-routes", t16: "t16-base", t17: "t17-dataset", t18: "t18-report",
   t19: "t19-serve", t20: "t20-capacity", t21: "t21-tier", t22: "t22-case", t23: "t23-win", t24: "t24-tree",
-  t25: "t25-arch", t26: "t26-runtime",
+  t25: "t25-arch", t26: "t26-runtime", t27: "t27-review",
 };
 
 function Figure({ name, idx }) {

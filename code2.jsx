@@ -471,5 +471,172 @@ ls  ~/.cache/huggingface/hub/models--convaiinnovations--laya/snapshots/*/   # mo
   ],
 };
 
+/* ============ OP4 · t27 ============ */
+CODE.t27 = {
+  note: { zh: "三个视角一次看清推送闸门。Python 那栏:一个完整的 MCP 服务器 typed-review(mcp>=2 的 MCPServer),暴露 review_push;切 hunk、每块一次 /v1/systemone、不对称过闸、模型挂了就全交给人。请求那栏:一个 hunk 的请求体——判决是 k=3 的 choice,严重度是 score,没有 noul。部署那栏:起一个本地 laya-serve 让代码不出网络,把服务器注册给 MCP 宿主(TaskaaS),以及不用宿主时的建议性 pre-push hook。",
+          en: "The push gate from three angles. Python: a complete MCP server, typed-review (MCPServer from mcp>=2), exposing review_push — split into hunks, one /v1/systemone per hunk, gate asymmetrically, and hand everything to people when the model is down. Request: one hunk's body — the verdict is a k=3 choice, severity a score, no noul. Run: start a local laya-serve so code never leaves the network, register the server with the MCP host (TaskaaS), and an advisory pre-push hook for when there is no host." },
+  tabs: [
+    { lang: PY, k: "py", file: "review_mcp.py", run: "# python review_mcp.py   (stdio MCP server)  ·  git diff | python review_mcp.py --check",
+      src: `"""typed-review: an MCP server that turns a push into typed decisions.
+
+Any MCP host (TaskaaS, Claude Code, an IDE agent) calls review_push. The
+model behind it is Jev or a laya-serve on your own network: same
+/v1/systemone protocol (OP1), only SYSTEMONE_URL changes.
+The model TRIAGES; it never writes a review comment (it cannot generate).
+"""
+import json, os, sys, urllib.request
+from mcp.server.mcpserver import MCPServer   # mcp>=2; on mcp<2: mcp.server.fastmcp.FastMCP
+
+URL   = os.environ.get("SYSTEMONE_URL", "http://127.0.0.1:8000") + "/v1/systemone"
+KEY   = os.environ.get("SYSTEMONE_KEY", "")
+THETA = float(os.environ.get("REVIEW_THETA", "0.6"))  # fit on YOUR review history (CA3)
+MAX_CHARS = 1200   # ~300 tokens: the English checkpoint's document room (LY2)
+
+QUESTIONS = {
+    # the verdict is a 3-way CHOICE, not a noul: pass/fail has a third outcome
+    "verdict": {"type": "choice",
+                "instructions": "Review this diff hunk as a senior engineer would.",
+                "criteria": {
+                    "approve": "small, local change that does what it says; nothing worth a reviewer's time",
+                    "request_changes": "a concrete defect: a bug, a security hole, a leaked secret, a broken contract",
+                    "needs_human": "touches design, a public API, a migration, auth or money, or cannot be judged from this hunk alone"}},
+    # who should look at it: a small k keeps each label its token room (LY2)
+    "risk": {"type": "choice", "instructions": "What is the main risk in this hunk?",
+             "criteria": {"none": "no meaningful risk", "security": "auth, injection, secrets, permissions",
+                          "correctness": "logic, edge cases, error handling", "performance": "loops, queries, memory"}},
+    # how bad if wrong: an ordered scale, so a SCORE
+    "severity": {"type": "score", "instructions": "How bad is it if this hunk is wrong in production?",
+                 "criteria": ["cosmetic", "minor", "user-visible bug", "outage, data loss or breach"]},
+}
+
+
+def split_hunks(diff):
+    """Unified diff -> [(file, hunk_text)], cut to the model's token room."""
+    out, path, cur = [], "?", []
+    for line in diff.splitlines() + ["diff --end"]:
+        if line.startswith(("diff ", "@@")) and cur:   # close the hunk BEFORE the path moves
+            out.append((path, "\\n".join(cur)))
+            cur = []
+        if line.startswith("+++ "):
+            path = line[4:].removeprefix("b/")
+        elif line.startswith("@@"):
+            cur = [line]
+        elif cur:
+            cur.append(line)
+    chunks = []
+    for path, h in out:   # a hunk over budget becomes several windows, never a truncation
+        for i in range(0, len(h), MAX_CHARS):
+            chunks.append((path, h[i:i + MAX_CHARS]))
+    return chunks
+
+
+def ask(state):
+    req = urllib.request.Request(URL, json.dumps({"state": state, "questions": QUESTIONS}).encode(),
+                                 {"Content-Type": "application/json",
+                                  **({"Authorization": "Bearer " + KEY} if KEY else {})})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return json.load(r)["answers"]
+
+
+def gate(a):
+    """One hunk -> an action. Only a confident APPROVE skips a human."""
+    v = a["verdict"]
+    if v["choice"] == "approve" and v["confidence"] >= THETA:
+        return "auto_pass"
+    if v["choice"] == "request_changes" and v["confidence"] >= THETA:
+        return "llm_review"   # a System 2 model writes the comment the owner will read
+    return "human_review"     # needs_human, or any low confidence
+
+
+def review(diff, repo="", ref=""):
+    hunks = []
+    for path, text in split_hunks(diff):
+        try:
+            a = ask({"repo": repo, "ref": ref, "file": path, "hunk": text})
+        except OSError:   # model down: the degradation path is agreed in advance (OP3)
+            hunks.append({"file": path, "action": "human_review", "verdict": "model_down"})
+            continue
+        hunks.append({"file": path, "action": gate(a),
+                      "verdict": a["verdict"]["choice"], "confidence": a["verdict"]["confidence"],
+                      "risk": a["risk"]["choice"], "severity": a["severity"]["score"]})
+    rank = {"auto_pass": 0, "llm_review": 1, "human_review": 2}
+    worst = max((h["action"] for h in hunks), key=rank.get, default="auto_pass")
+    todo = [h for h in hunks if h["action"] != "auto_pass"]
+    return {"push_action": worst,                      # the push is only as clear as its worst hunk
+            "hunks_total": len(hunks), "hunks_to_review": len(todo),
+            "review": todo,                            # hand the reviewer ONLY these
+            "note": "confidence is normalized entropy, not a probability (CA1)"}
+
+
+mcp = MCPServer("typed-review")
+
+
+@mcp.tool()
+def review_push(diff: str, repo: str = "", ref: str = "") -> dict:
+    """Triage a pushed diff: which hunks can skip review, which need an LLM or a human."""
+    return review(diff, repo, ref)
+
+
+if __name__ == "__main__":
+    if sys.argv[1:2] == ["--check"]:          # git hook / CI mode: no MCP host needed
+        res = review(sys.stdin.read(), ref=" ".join(sys.argv[2:]))
+        print(json.dumps(res, ensure_ascii=False, indent=2))
+        sys.exit(0 if res["push_action"] == "auto_pass" else 2)
+    mcp.run()                                  # stdio; or mcp.run("streamable-http")` },
+    { lang: REQ, k: "json", file: "hunk_request.json",
+      src: `// one hunk = one POST /v1/systemone — the same body for Jev or laya-serve
+{
+  "state": { "repo": "shop", "ref": "refs/heads/main", "file": "app/auth.py",
+             "hunk": "@@ -40,3 +40,3 @@ ... -  if user.is_admin(): ... +  if True: ..." },
+  "questions": {
+    "verdict":  { "type": "choice", "instructions": "Review this diff hunk as a senior engineer would.",
+                  "criteria": { "approve": "small, local change ...",
+                                "request_changes": "a concrete defect ...",
+                                "needs_human": "design, API, migration, auth or money ..." } },
+    "risk":     { "type": "choice", "criteria": { "none": "...", "security": "...",
+                                                  "correctness": "...", "performance": "..." } },
+    "severity": { "type": "score", "criteria": ["cosmetic", "minor", "user-visible bug",
+                                                "outage, data loss or breach"] }
+  }
+}
+// what review_push hands back to TaskaaS (the MCP tool result) — shape only,
+// illustrative values, NOT measured:
+{ "push_action": "llm_review", "hunks_total": 7, "hunks_to_review": 2,
+  "review": [ { "file": "app/auth.py", "action": "llm_review", "verdict": "request_changes",
+                "confidence": 0.71, "risk": "security", "severity": 2.6 } ],
+  "note": "confidence is normalized entropy, not a probability (CA1)" }` },
+    { lang: OPS, k: "sh", file: "wire_taskaas.sh",
+      src: `# 1) the model: Jev, or your own laya-serve so the code never leaves (OP1)
+pip install "laya[serve]" "mcp>=2"
+LAYA_MODELS=english LAYA_API_KEY=change-me laya-serve &        # English: code is English
+export SYSTEMONE_URL=http://127.0.0.1:8000 SYSTEMONE_KEY=change-me REVIEW_THETA=0.6
+
+# 2) register the MCP server with the host. This is the common "mcpServers"
+#    shape (Claude Code, most IDE agents); use TaskaaS's own config if it differs.
+cat > mcp.json <<'JSON'
+{ "mcpServers": { "typed-review": {
+    "command": "python", "args": ["review_mcp.py"],
+    "env": { "SYSTEMONE_URL": "http://127.0.0.1:8000", "REVIEW_THETA": "0.6" } } } }
+JSON
+# TaskaaS side: on a push event, call tool review_push(diff, repo, ref), then
+#   auto_pass → set a pass status · llm_review → task for an LLM reviewer
+#   human_review → task for a person, routed by each hunk's "risk"
+
+# 3) no MCP host? the same script as an ADVISORY pre-push hook (never blocks)
+cat > .git/hooks/pre-push <<'SH'
+#!/bin/sh
+z=0000000000000000000000000000000000000000
+while read lref lsha rref rsha; do
+  [ "$lsha" = "$z" ] && continue                          # deleting a branch
+  base=$rsha; [ "$rsha" = "$z" ] && base=$(git merge-base "$lsha" origin/HEAD)
+  git diff "$base" "$lsha" | python review_mcp.py --check "$rref" ||
+    echo "typed-review: some hunks need eyes (listed above)"
+done
+exit 0
+SH
+chmod +x .git/hooks/pre-push` },
+  ],
+};
+
 // keep the derived reference the totals use
 window.CODE = CODE;

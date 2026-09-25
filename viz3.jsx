@@ -1,5 +1,5 @@
 /* =========================================================
-   viz3.jsx — benches for Modules VII–VIII (t19–t24),
+   viz3.jsx — benches for Modules VII–VIII (t19–t24, t27),
    the VIZ registry and <Viz>. Loaded after viz.jsx / viz2.jsx.
    ========================================================= */
 
@@ -261,12 +261,96 @@ function TreeViz() {
   );
 }
 
+/* t27 · reviewLab — code review as a k=3 choice, gated per hunk, cⁿ per push */
+// Synthetic review set: gold verdicts drawn from a prior where most hunks are
+// fine; the model is makeEval's recipe (skill lifts the true class). Not measured.
+const REVIEW_PRIOR = [0.72, 0.10, 0.18];         // approve / request_changes / needs_human
+function makeReviewSet(n, skill, seed) {
+  const r = rng(seed), items = [];
+  for (let i = 0; i < n; i++) {
+    const u = r();
+    const gold = u < REVIEW_PRIOR[0] ? 0 : u < REVIEW_PRIOR[0] + REVIEW_PRIOR[1] ? 1 : 2;
+    const logits = [0, 1, 2].map(() => gauss(r) * 0.6);
+    logits[gold] += skill * 2.4;
+    const p = softmax(logits);
+    let top = 0; for (let j = 1; j < 3; j++) if (p[j] > p[top]) top = j;
+    items.push({ p, gold, top, conf: layaConf(p) });
+  }
+  return items;
+}
+function ReviewViz() {
+  const L = useL();
+  const [thr, setThr] = React.useState(0.5);       // gate on Laya's confidence (normalized entropy, k=3)
+  const [skill, setSkill] = React.useState(1.0);
+  const [hunks, setHunks] = React.useState(6);     // hunks per push
+  const [tok, setTok] = React.useState(200);       // tokens per hunk
+  const [pushes, setPushes] = React.useState(120); // pushes per day
+  const set = React.useMemo(() => makeReviewSet(1500, skill, 2027), [skill]);
+  // English checkpoint: max_len 512 − head_max_len 192 ≈ 320, minus the state wrapper → ~300
+  const ROOM = 300;
+  const windows = Math.ceil(tok / ROOM);
+  const nEff = hunks * windows;                    // decisions per push
+  // per-hunk gate: only a confident APPROVE skips a human
+  const auto = set.filter((x) => x.top === 0 && x.conf >= thr);
+  const c = auto.length / set.length;
+  const escaped = auto.length ? auto.filter((x) => x.gold === 1).length / auto.length : 0;  // defects waved through
+  const llm = set.filter((x) => x.top === 1 && x.conf >= thr).length / set.length;
+  const human = 1 - c - llm;
+  const pushAuto = Math.pow(c, nEff);
+  const perDay = pushes * nEff;
+  const labels = ["approve", "changes", "human"];
+  const ex = set.find((x) => x.gold === 0) || set[0];
+  const exAct = ex.top === 0 && ex.conf >= thr ? "auto_pass" : ex.top === 1 && ex.conf >= thr ? "llm_review" : "human_review";
+  return (
+    <div>
+      <VizHead idx="OP4" title={L("代码评审当作 k=3 的 choice:按 hunk 过闸,按推送是 cⁿ", "Code review as a k=3 choice: gate per hunk, cⁿ per push")} />
+      <div className="viz-ctrl">
+        <Slider label={L("置信度门槛 θ(k=3 的归一化熵)", "threshold θ (normalized entropy, k=3)")} min={0.1} max={0.9} step={0.05} value={thr} onChange={setThr} />
+        <Slider label={L("模型能力(合成)", "model skill (synthetic)")} min={0.3} max={1.6} step={0.1} value={skill} onChange={setSkill} />
+        <Slider label={L("每次推送的 hunk 数 n", "hunks per push n")} min={1} max={20} step={1} value={hunks} onChange={setHunks} />
+        <Slider label={L("每个 hunk 的 token 数", "tokens per hunk")} min={50} max={900} step={50} value={tok} onChange={setTok} />
+        <Slider label={L("每日推送数", "pushes / day")} min={20} max={500} step={20} value={pushes} onChange={setPushes} />
+      </div>
+      <div className="jv-grid2" style={{ marginTop: 10 }}>
+        <div>
+          <div className="jv-cap">{L("一个本该放行的 hunk:verdict 的分布", "one hunk that should pass: the verdict distribution")}</div>
+          <DistBars probs={ex.p} labels={labels} mark={ex.top} />
+          <div style={{ font: "500 11px var(--f-mono)", color: "var(--muted)", textAlign: "center" }}>
+            confidence {nf(ex.conf, 3)} → <span style={{ color: exAct === "auto_pass" ? "var(--ok)" : "var(--warn)" }}>{exAct}</span>
+          </div>
+        </div>
+        <div>
+          <div className="jv-cap">{L("每个 hunk 被送到哪", "where each hunk goes")}</div>
+          <Bar label="auto_pass" value={c} max={1} tone="ok" valText={pct1(c)} />
+          <Bar label="llm_review" value={llm} max={1} tone="warn" valText={pct1(llm)} />
+          <Bar label="human_review" value={human} max={1} tone="acc" valText={pct1(human)} />
+          <div className="jv-cap" style={{ marginTop: 6 }}>{L("token 预算", "token budget")}: {tok} / ~{ROOM} → {windows > 1 ? L(`切成 ${windows} 个窗口`, `${windows} windows`) : L("放得下", "fits")}</div>
+        </div>
+      </div>
+      <div className="jv-kpi-grid">
+        <Kpi label={L("评审量省下", "review load saved")} value={pct1(c)} tone="acc" hint={`${nf(perDay * (1 - c), 0)} / ${nf(perDay, 0)} ${L("块/日要看", "hunks/day to read")}`} />
+        <Kpi label={L("推送整体自动放行", "whole push auto-passes")} value={pct1(pushAuto)} tone={pushAuto < 0.1 ? "bad" : "warn"} hint={`c^n = ${nf(c, 2)}^${nEff}`} />
+        <Kpi label={L("放行里的漏检", "escapes among passes")} value={pct1(escaped)} tone={escaped > 0.05 ? "bad" : "ok"} hint={`≈ ${nf(perDay * c * escaped, 1)} ${L("个缺陷/日", "defects/day")}`} />
+        <Kpi label={L("一次推送的模型延迟", "model latency / push")} value={ms(nEff * MEASURED.latMed)} tone="mut" hint={L("CS1 中位数 × 决策数,粗估", "CS1 median × decisions, rough")} />
+      </div>
+      <Note mark="!" tone={pushAuto < 0.1 ? "bad" : ""}>
+        {L(`一次推送只有最差的那一块放行了才算放行:${pct1(c)} 的 hunk 放行率,到 ${nEff} 个决策的推送上只剩 ${pct1(pushAuto)}。别拿「推送自动化率」当目标——真正的收益是评审者只读没放行的 ${pct1(1 - c)}。拉高门槛能压低漏检,代价是评审量;这一对取舍和 CA3 的门槛曲线是同一件事。`,
+           `A push passes only if its worst hunk passes: a ${pct1(c)} hunk pass rate leaves ${pct1(pushAuto)} for a push of ${nEff} decisions. Do not target push automation — the real win is that reviewers read only the ${pct1(1 - c)} that did not pass. Raising θ cuts escapes at the cost of review load; it is the same trade as CA3's threshold curve.`)}
+      </Note>
+      <Note mark="≈">
+        {L("合成数据,不是实测:先验 72% approve / 10% request_changes / 18% needs_human 是假设。你自己的门槛、放行率和漏检率,要用合并历史建评测集才能知道(EV1–EV3)。",
+           "Synthetic, not measured: the 72% approve / 10% request_changes / 18% needs_human prior is an assumption. Your own threshold, pass rate and escape rate are known only after building an eval set from your merge history (EV1–EV3).")}
+      </Note>
+    </div>
+  );
+}
+
 /* ---------------- registry + <Viz> ---------------- */
 const VIZ = Object.assign({},
   window.__JV_VIZ_1 || {},
   window.__JV_VIZ_2 || {},
   {
-    serveLab: ServeViz, capacityLab: CapacityViz, tierLab: TierViz,
+    serveLab: ServeViz, capacityLab: CapacityViz, tierLab: TierViz, reviewLab: ReviewViz,
     caseLab: CaseViz, winLab: WinViz, treeLab: TreeViz,
   });
 

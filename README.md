@@ -2,7 +2,7 @@
 
 中英双语的「System One 决策模型」自学教程 —— 面向要把 Jev 或它的开源平替(Laya 为首)真的评测、部署、并做出上线判决的工程师。
 
-**8 个模块 / 26 章**,每章由三块组成:
+**8 个模块 / 27 章**,每章由三块组成:
 
 - **决策台**:一个可交互模拟器,所有数字在你的浏览器里现算 —— 真实的 softmax、真实的 ECE、真实的温度网格搜索、真实的 M/M/c 排队。没有一张是画出来的假图。
 - **解释**:讲清机制、代价和边界。
@@ -20,7 +20,7 @@
 | IV | Laya | 4 | 三 checkpoint 与语言路由 · head_max_len token 预算 · 源码级的坑 · **运行时:模型在哪、怎么跑** |
 | V | 开源生态 | 3 | 编码器派(Von/Verdict) · LLM 派(Kev/SemIf) · **你可能根本不需要它** |
 | VI | 自己评测 | 3 | 三条基线 · 建评测集与一致率 · 四张表判决模板 |
-| VII | 上线工程 | 3 | 协议兼容自托管 · 排队容量 · 两级架构 |
+| VII | 上线工程 | 4 | 协议兼容自托管 · 排队容量 · 两级架构 · **代码评审闸门:k=3 choice + MCP 接入 TaskaaS** |
 | VIII | 案例与决策 | 2+1 | **实测失败案例** · 成本模型成功形状 · 选型决策树 |
 
 ## 本地运行
@@ -38,17 +38,17 @@ python -m http.server 5870 --directory D:/webcode/JEV_BOOK
 ```
 index.html          入口,按顺序加载下面的脚本
 i18n.jsx            中英切换与 UI 文案
-data.jsx            8 个模块 / 24 章的课程数据 + 本书实测常量 MEASURED
+data.jsx            8 个模块 / 27 章的课程数据 + 本书实测常量 MEASURED
 viz.jsx             共享前奏 + 概率工具(softmax/ece/fitTemp) + t1–t9 决策台
 viz2.jsx            t10–t18 决策台
-viz3.jsx            t19–t24 决策台 + VIZ 注册表 + <Viz>
-figures.jsx         <Figure> + 24 章节图 + 8 张模块架构图
+viz3.jsx            t19–t24、t27 决策台 + VIZ 注册表 + <Viz>
+figures.jsx         <Figure> + 27 章节图 + 8 张模块架构图
 code.jsx            <CodeLab> + t1–t12 代码面板
-code2.jsx           t13–t24 代码面板
+code2.jsx           t13–t24、t26–t27 代码面板
 pages.jsx           首页 / 模块页 / 章节页
 app.jsx             路由、主题、进度
 jv.css / styles.css 决策台样式 + 全站样式(indigo/amber 主题)
-content/            52 个 markdown 讲义(t1–t26 × zh/en)
+content/            54 个 markdown 讲义(t1–t27 × zh/en)
 ```
 
 ## 关于「所有数字现算」
